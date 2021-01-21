@@ -1,0 +1,12 @@
+[package]
+name = "rusty-daw-engine"
+version = "0.1.0"
+authors = ["Mike Hilgendorf <mike@hilgendorf.audio>"]
+edition = "2018"
+license = "GPLv3"
+
+[dependencies]
+cpal = "0.13"
+hound = { git = "https://github.com/ruuda/hound.git"}
+basedrop = { git = "https://github.com/glowcoil/basedrop.git" }
+ringbuf = "0.2"
