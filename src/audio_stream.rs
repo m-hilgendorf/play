@@ -2,6 +2,8 @@ use crate::utils::interleave;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::Stream;
 
+/// The playback context is used by the audio callback to map data from the audio
+/// file to the playback buffer.
 pub struct PlaybackContext<'a> {
     pub buffer_size: usize,
     pub sample_rate: f64,
@@ -10,12 +12,14 @@ pub struct PlaybackContext<'a> {
 }
 
 impl<'a> PlaybackContext<'a> {
+    /// return a buffer of output samples corresponding to a channel index
     pub fn get_output(&mut self, idx: usize) -> &'_ mut [f32] {
         let offset = idx * self.buffer_size;
         &mut self.output_buffer[offset..offset + self.buffer_size]
     }
 }
 
+/// start the audio stream
 pub fn audio_stream(mut main_callback: impl FnMut(PlaybackContext) + Send + 'static) -> Stream {
     let host = cpal::default_host();
     let output_device = host.default_output_device().expect("no output found");
@@ -45,7 +49,7 @@ pub fn audio_stream(mut main_callback: impl FnMut(PlaybackContext) + Send + 'sta
             sample_rate,
             output_buffer: &mut output_buffer,
         };
-        
+
         main_callback(context);
         interleave(&output_buffer, data, num_channels);
     };
