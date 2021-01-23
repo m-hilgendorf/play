@@ -1,6 +1,8 @@
 mod audio_file;
 mod audio_stream;
+mod sample_player;
 mod utils;
+
 use audio_file::AudioFile;
 use audio_stream::audio_stream;
 use ringbuf::RingBuffer;
@@ -12,7 +14,7 @@ struct AudioThreadState {
 }
 
 fn main() {
-    // get program input... 
+    // get program input...
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         println!("usage is: `play <path>`");
@@ -51,7 +53,7 @@ fn main() {
     let state = Arc::new(AudioThreadState {
         content: AudioFile::open(path).expect("failed to read file"),
     });
-    
+
     // if this fails, keep trying
     while let Err(_) = tx.push(state.clone()) {}
 
