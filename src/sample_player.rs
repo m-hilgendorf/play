@@ -1,5 +1,5 @@
 use crate::audio_file::AudioFile;
-use crate::{audio_file, audio_stream::PlaybackContext};
+use crate::audio_stream::PlaybackContext;
 use ringbuf::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
 
@@ -74,7 +74,14 @@ impl SamplePlayer {
         }
 
         if let Some(file) = &self.file {
+            if self.playhead >= file.num_samples {
+                self.state = PlayerState::Stopped;
+                return;
+            }
             for channel in 0..context.num_channels.max(file.num_channels) {
+                if !self.active[channel] {
+                    continue;
+                }
                 let start = channel * file.num_samples + self.playhead.min(file.num_samples);
                 let end = channel * file.num_samples
                     + (self.playhead + context.buffer_size).min(file.num_samples);
@@ -82,6 +89,7 @@ impl SamplePlayer {
                     .get_output(channel)
                     .copy_from_slice(&file.data[start..end]);
             }
+            self.playhead += context.buffer_size;
         }
     }
 }

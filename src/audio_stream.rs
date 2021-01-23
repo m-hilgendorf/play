@@ -42,6 +42,9 @@ pub fn audio_stream(mut main_callback: impl FnMut(PlaybackContext) + Send + 'sta
         for sample in data.iter_mut() {
             *sample = 0.0;
         }
+        for sample in &mut output_buffer.iter_mut() {
+            *sample = 0.0;
+        }
 
         let context = PlaybackContext {
             buffer_size,
