@@ -1,10 +1,10 @@
-#![allow(dead_code)]
 mod audio_file;
 mod audio_stream;
 mod sample_player;
 mod utils;
 
 use audio_stream::audio_stream;
+use basedrop::Collector;
 use sample_player::*;
 
 fn main() {
@@ -14,9 +14,11 @@ fn main() {
         println!("usage is: `play <path>`");
         std::process::exit(1);
     }
+    // initialize gc
+    let mut gc = Collector::new();
 
     // Create the sample player and controller
-    let (mut player, mut controller) = sample_player();
+    let (mut player, mut controller) = sample_player(&gc);
 
     // initialize state and begin the stream...
     let _stream = audio_stream(move |mut context| {
@@ -26,18 +28,23 @@ fn main() {
     // some random operations
     controller.load_file(&args[1]);
     controller.play();
-    let duration =
-        (controller.duration_samples().unwrap() as f64) / controller.sample_rate().unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(duration as u64));
+    std::thread::sleep(std::time::Duration::from_millis(500));
     controller.stop();
     controller.seek(0.0);
     controller.set_active(0, false);
     controller.play();
-    std::thread::sleep(std::time::Duration::from_secs(duration as u64));
+    std::thread::sleep(std::time::Duration::from_millis(500));
     controller.stop();
     controller.seek(0.0);
     controller.set_active(1, false);
     controller.set_active(0, true);
     controller.play();
-    std::thread::sleep(std::time::Duration::from_secs(duration as u64));
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    controller.stop();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    controller.set_active(0, true);
+    controller.set_active(1, true);
+    controller.play();
+    std::thread::sleep(std::time::Duration::from_millis(3000));
+    gc.collect();
 }

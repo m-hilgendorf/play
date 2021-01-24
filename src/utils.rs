@@ -5,10 +5,12 @@ use std::sync::{
 
 /// A boolean flag that can be shared between threads
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct Flag {
     flag: Arc<AtomicBool>,
 }
 
+#[allow(dead_code)]
 impl Flag {
     /// create a new flag, set to `false`
     pub fn new() -> Self {

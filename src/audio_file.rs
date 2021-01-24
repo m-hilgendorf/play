@@ -1,6 +1,5 @@
 use crate::utils::deinterleave;
 use hound::{SampleFormat, WavReader};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// An audio file, loaded into memory
 pub struct AudioFile {
@@ -12,28 +11,15 @@ pub struct AudioFile {
     pub num_channels: usize,
     /// number of sample sin the audio file
     pub num_samples: usize,
-    /// the current read offset (used during playback)
-    pub read_offset: AtomicUsize,
 }
 
 impl AudioFile {
-    /// returns true if the read_offset has passed the number of samples.
-    pub fn finished(&self) -> bool {
-        self.read_offset.load(Ordering::SeqCst) >= self.num_samples
-    }
-
-    /// advance the read_offset by a count.
-    pub fn advance(&self, count: usize) {
-        self.read_offset.fetch_add(count, Ordering::SeqCst);
-    }
-
     /// return a buffer of samples corresponding to a channel in the audio file
-    pub fn get_channel(&self, idx: usize, size: usize) -> &'_ [f32] {
-        let sample_start = self.read_offset.load(Ordering::SeqCst);
-        let sample_end = (sample_start + size).min(self.num_samples);
-        let buffer_start = self.num_samples * idx + sample_start;
-        let buffer_end = self.num_samples * idx + sample_end;
-        &self.data[buffer_start..buffer_end]
+    #[allow(dead_code)]
+    pub fn get_channel(&self, idx: usize) -> &'_ [f32] {
+        debug_assert!(idx < self.num_channels);
+        let start = self.num_samples * idx;
+        &self.data[start..(start + self.num_samples)]
     }
 
     /// open a file
@@ -73,9 +59,8 @@ impl AudioFile {
         Ok(Self {
             data: deinterleaved,
             sample_rate: spec.sample_rate as f64,
-            num_channels: num_channels,
-            num_samples: num_samples,
-            read_offset: AtomicUsize::new(0),
+            num_channels,
+            num_samples,
         })
     }
 }

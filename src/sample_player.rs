@@ -1,7 +1,7 @@
 use crate::audio_file::AudioFile;
 use crate::audio_stream::PlaybackContext;
+use basedrop::{Collector, Handle, Owned};
 use ringbuf::{Consumer, Producer, RingBuffer};
-use std::sync::Arc;
 
 enum PlayerState {
     Playing,
@@ -14,11 +14,11 @@ enum Message {
     Play,
     Stop,
     SetActive(usize, bool),
-    NewFile(Arc<AudioFile>),
+    NewFile(Owned<AudioFile>),
 }
 
 pub struct SamplePlayer {
-    file: Option<Arc<AudioFile>>,
+    file: Option<Owned<AudioFile>>,
     active: [bool; 32],
     playhead: usize,
     state: PlayerState,
@@ -27,11 +27,14 @@ pub struct SamplePlayer {
 
 pub struct SamplePlayerController {
     tx: Producer<Message>,
-    files: Vec<Arc<AudioFile>>,
+    collector: Handle,
+    sample_rate: Option<f64>,
+    num_channels: Option<usize>,
+    num_samples: Option<usize>,
 }
 
 /// create a new sample player and its controller
-pub fn sample_player() -> (SamplePlayer, SamplePlayerController) {
+pub fn sample_player(c: &Collector) -> (SamplePlayer, SamplePlayerController) {
     let (tx, rx) = RingBuffer::new(2048).split();
     (
         SamplePlayer {
@@ -41,7 +44,13 @@ pub fn sample_player() -> (SamplePlayer, SamplePlayerController) {
             state: PlayerState::Stopped,
             rx,
         },
-        SamplePlayerController { files: vec![], tx },
+        SamplePlayerController {
+            tx,
+            collector: c.handle(),
+            sample_rate: None,
+            num_channels: None,
+            num_samples: None,
+        },
     )
 }
 
@@ -94,15 +103,16 @@ impl SamplePlayer {
     }
 }
 
+#[allow(dead_code)]
 impl SamplePlayerController {
     pub fn sample_rate(&self) -> Option<f64> {
-        self.files.last().map(|f| f.sample_rate)
+        self.sample_rate
     }
     pub fn duration_samples(&self) -> Option<usize> {
-        self.files.last().map(|f| f.num_samples)
+        self.num_samples
     }
     pub fn num_channels(&self) -> Option<usize> {
-        self.files.last().map(|f| f.num_channels)
+        self.num_channels
     }
     fn send_msg(&mut self, message: Message) {
         let mut e = self.tx.push(message);
@@ -126,8 +136,13 @@ impl SamplePlayerController {
         self.send_msg(Message::SetActive(channel_index, active));
     }
     pub fn load_file(&mut self, s: &str) {
-        let audio_file = Arc::new(AudioFile::open(s).expect("file does not exist"));
-        self.files.push(audio_file.clone());
+        let audio_file = Owned::new(
+            &self.collector,
+            AudioFile::open(s).expect("file does not exist"),
+        );
+        self.num_samples = Some(audio_file.num_samples);
+        self.num_channels = Some(audio_file.num_channels);
+        self.sample_rate = Some(audio_file.sample_rate);
         self.send_msg(Message::NewFile(audio_file));
     }
 }
