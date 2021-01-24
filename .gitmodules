@@ -1,0 +1,3 @@
+[submodule "tuix_waveform_viewer"]
+	path = tuix_waveform_viewer
+	url = https://github.com/geom3trik/tuix_waveform_viewer.git
