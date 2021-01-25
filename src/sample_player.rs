@@ -1,7 +1,9 @@
 use crate::audio_file::AudioFile;
 use crate::audio_stream::PlaybackContext;
-use basedrop::{Collector, Handle, Owned};
+use basedrop::{Collector, Handle, Shared};
 use ringbuf::{Consumer, Producer, RingBuffer};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 enum PlayerState {
     Playing,
@@ -14,54 +16,63 @@ enum Message {
     Play,
     Stop,
     SetActive(usize, bool),
-    NewFile(Owned<AudioFile>),
+    NewFile(Shared<AudioFile>),
 }
 
 pub struct SamplePlayer {
-    file: Option<Owned<AudioFile>>,
+    pub file: Option<Shared<AudioFile>>,
     active: [bool; 32],
-    playhead: usize,
+    playhead: Arc<AtomicUsize>,
     state: PlayerState,
     rx: Consumer<Message>,
 }
 
 pub struct SamplePlayerController {
     tx: Producer<Message>,
+    playhead: Arc<AtomicUsize>,
     collector: Handle,
     sample_rate: Option<f64>,
     num_channels: Option<usize>,
     num_samples: Option<usize>,
+    pub file:Option<Shared<AudioFile>>,
 }
 
 /// create a new sample player and its controller
 pub fn sample_player(c: &Collector) -> (SamplePlayer, SamplePlayerController) {
+    let playhead = Arc::new(AtomicUsize::new(0));
     let (tx, rx) = RingBuffer::new(2048).split();
     (
         SamplePlayer {
             file: None,
             active: [true; 32],
-            playhead: 0,
+            playhead: playhead.clone(),
             state: PlayerState::Stopped,
             rx,
         },
         SamplePlayerController {
             tx,
+            playhead: playhead.clone(),
             collector: c.handle(),
             sample_rate: None,
             num_channels: None,
             num_samples: None,
+            file: None,
         },
     )
 }
 
 impl SamplePlayer {
+    pub fn playhead(&self) -> usize {
+        self.playhead.load(Ordering::SeqCst)
+    }
+
     #[inline]
     pub fn advance(&mut self, context: &mut PlaybackContext) {
         while let Some(msg) = self.rx.pop() {
             match msg {
                 Message::Seek(pos) => {
                     if let Some(f) = &self.file {
-                        self.playhead = ((f.sample_rate * pos) as usize).min(f.num_samples);
+                        self.playhead.store(((f.sample_rate * pos) as usize).min(f.num_samples), Ordering::SeqCst);
                     }
                 }
                 Message::NewFile(file) => {
@@ -83,7 +94,7 @@ impl SamplePlayer {
         }
 
         if let Some(file) = &self.file {
-            if self.playhead >= file.num_samples {
+            if self.playhead() >= file.num_samples {
                 self.state = PlayerState::Stopped;
                 return;
             }
@@ -91,14 +102,14 @@ impl SamplePlayer {
                 if !self.active[channel] {
                     continue;
                 }
-                let start = channel * file.num_samples + self.playhead.min(file.num_samples);
+                let start = channel * file.num_samples + self.playhead().min(file.num_samples);
                 let end = channel * file.num_samples
-                    + (self.playhead + context.buffer_size).min(file.num_samples);
+                    + (self.playhead() + context.buffer_size).min(file.num_samples);
                 context
                     .get_output(channel)
                     .copy_from_slice(&file.data[start..end]);
             }
-            self.playhead += context.buffer_size;
+            self.playhead.fetch_add(context.buffer_size, Ordering::SeqCst);
         }
     }
 }
@@ -123,6 +134,9 @@ impl SamplePlayerController {
     pub fn seek(&mut self, seconds: f64) {
         self.send_msg(Message::Seek(seconds));
     }
+    pub fn playhead(&self) -> usize {
+        self.playhead.load(Ordering::SeqCst)
+    }
     pub fn play(&mut self) {
         self.send_msg(Message::Play);
     }
@@ -136,13 +150,23 @@ impl SamplePlayerController {
         self.send_msg(Message::SetActive(channel_index, active));
     }
     pub fn load_file(&mut self, s: &str) {
-        let audio_file = Owned::new(
+        let audio_file = Shared::new(
             &self.collector,
             AudioFile::open(s).expect("file does not exist"),
         );
         self.num_samples = Some(audio_file.num_samples);
         self.num_channels = Some(audio_file.num_channels);
         self.sample_rate = Some(audio_file.sample_rate);
+        self.file = Some(Shared::clone(&audio_file));
         self.send_msg(Message::NewFile(audio_file));
+    }
+    pub fn get_magnitude (&self, sample_idx:usize) -> f32 {
+        if let Some(file) = &self.file {
+            let ldx = sample_idx; 
+            let rdx = sample_idx + file.num_samples;
+            (file.data[ldx].abs() + file.data[rdx].abs()) / 2.0
+        } else { 
+            0.0
+        }
     }
 }

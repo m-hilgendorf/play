@@ -7,19 +7,19 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'rusty-daw-engine'",
+            "name": "Debug executable 'play'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=rusty-daw-engine",
-                    "--package=rusty-daw-engine"
+                    "--bin=play",
+                    "--package=play"
                 ],
                 "filter": {
-                    "name": "rusty-daw-engine",
+                    "name": "play",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["test-data/loop.wav"],
             "cwd": "${workspaceFolder}"
         },
         {
