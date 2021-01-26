@@ -11,3 +11,4 @@ hound = { git = "https://github.com/ruuda/hound.git"}
 basedrop = { git = "https://github.com/glowcoil/basedrop.git" }
 ringbuf = "0.2"
 druid = "0.7.0"
+rustfft = "5.0"

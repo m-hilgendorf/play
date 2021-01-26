@@ -34,7 +34,7 @@ pub struct SamplePlayerController {
     sample_rate: Option<f64>,
     num_channels: Option<usize>,
     num_samples: Option<usize>,
-    pub file:Option<Shared<AudioFile>>,
+    pub file: Option<Shared<AudioFile>>,
 }
 
 /// create a new sample player and its controller
@@ -72,7 +72,10 @@ impl SamplePlayer {
             match msg {
                 Message::Seek(pos) => {
                     if let Some(f) = &self.file {
-                        self.playhead.store(((f.sample_rate * pos) as usize).min(f.num_samples), Ordering::SeqCst);
+                        self.playhead.store(
+                            ((f.sample_rate * pos) as usize).min(f.num_samples),
+                            Ordering::SeqCst,
+                        );
                     }
                 }
                 Message::NewFile(file) => {
@@ -105,11 +108,11 @@ impl SamplePlayer {
                 let start = channel * file.num_samples + self.playhead().min(file.num_samples);
                 let end = channel * file.num_samples
                     + (self.playhead() + context.buffer_size).min(file.num_samples);
-                context
-                    .get_output(channel)
+                context.get_output(channel)[0..(end - start)]
                     .copy_from_slice(&file.data[start..end]);
             }
-            self.playhead.fetch_add(context.buffer_size, Ordering::SeqCst);
+            self.playhead
+                .fetch_add(context.buffer_size, Ordering::SeqCst);
         }
     }
 }
@@ -160,12 +163,12 @@ impl SamplePlayerController {
         self.file = Some(Shared::clone(&audio_file));
         self.send_msg(Message::NewFile(audio_file));
     }
-    pub fn get_magnitude (&self, sample_idx:usize) -> f32 {
+    pub fn get_magnitude(&self, sample_idx: usize) -> f32 {
         if let Some(file) = &self.file {
-            let ldx = sample_idx; 
+            let ldx = sample_idx;
             let rdx = sample_idx + file.num_samples;
             (file.data[ldx].abs() + file.data[rdx].abs()) / 2.0
-        } else { 
+        } else {
             0.0
         }
     }

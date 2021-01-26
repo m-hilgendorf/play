@@ -2,13 +2,13 @@
 mod audio_file;
 mod audio_stream;
 mod sample_player;
-mod utils;
 mod ui;
+mod utils;
 use audio_stream::audio_stream;
 use basedrop::Collector;
 use sample_player::*;
 
-fn main()  -> Result<(), druid::PlatformError> {
+fn main() -> Result<(), druid::PlatformError> {
     // get program input...
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
