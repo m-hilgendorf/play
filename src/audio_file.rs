@@ -1,7 +1,7 @@
 use crate::utils::deinterleave;
-use druid::{LinearGradient, kurbo::BezPath, UnitPoint};
+use druid::piet::GradientStop;
 use druid::Color;
-use druid::{piet::GradientStop};
+use druid::{kurbo::BezPath, LinearGradient, UnitPoint};
 use hound::{SampleFormat, WavReader};
 use rustfft::{num_complex::Complex, FftPlanner};
 pub struct Peaks {
@@ -65,25 +65,27 @@ impl AudioFile {
 
             path0.line_to((x1, min));
             path1.line_to((x1, max));
-            
+
             let color = Color::hlc(180.0 + 10.0 * centroid, 50.0 + 40.0 * centroid, 127.0);
-            
+
             gradient.push(GradientStop {
-                pos: x0 as f32, 
-                color: color.clone()
+                pos: x0 as f32,
+                color: color.clone(),
             });
             gradient.push(GradientStop {
-                pos: x1 as f32, 
-                color
+                pos: x1 as f32,
+                color,
             });
             x0 = x1;
         }
-        path0.line_to((1.0,0.0));
+        path0.line_to((1.0, 0.0));
         path1.line_to((1.0, 0.0));
         path0.extend(path1);
         path0.close_path();
-        (path0, LinearGradient::new(    UnitPoint::LEFT,
-            UnitPoint::RIGHT,gradient))
+        (
+            path0,
+            LinearGradient::new(UnitPoint::LEFT, UnitPoint::RIGHT, gradient),
+        )
     }
 
     pub fn spectral_peaks(&self, channel: usize) -> Peaks {
