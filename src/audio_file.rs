@@ -1,15 +1,11 @@
 use crate::utils::deinterleave;
-use druid::kurbo::BezPath;
+use druid::{LinearGradient, kurbo::BezPath, UnitPoint};
 use druid::Color;
+use druid::{piet::GradientStop};
 use hound::{SampleFormat, WavReader};
 use rustfft::{num_complex::Complex, FftPlanner};
-
-pub struct PeakView {
-    pub segments: Vec<(BezPath, Color)>,
-}
-
 pub struct Peaks {
-    pub peaks: Vec<(usize, PeakView)>,
+    pub peaks: Vec<(usize, (BezPath, LinearGradient))>,
 }
 
 /// An audio file, loaded into memory
@@ -25,16 +21,17 @@ pub struct AudioFile {
 }
 
 impl AudioFile {
-    fn peak(&self, channel: usize, block_size: usize) -> PeakView {
+    fn peak(&self, channel: usize, block_size: usize) -> (BezPath, LinearGradient) {
         let mut planner = FftPlanner::<f32>::new();
         let mut fft_buf = vec![Complex::new(0.0f32, 0.0f32); block_size];
         let fft = planner.plan_fft_forward(block_size);
         let time = &self.get_channel(channel)[0..self.num_samples];
-        let mut result = vec![];
         let mut x0 = 0.0;
-        let mut min0 = 0.5;
-        let mut max0 = 0.5;
-
+        let mut path0 = BezPath::new();
+        let mut path1 = BezPath::new();
+        let mut gradient = vec![];
+        path0.move_to((0.0, 0.0));
+        path1.move_to((0.0, 0.0));
         for (chunk, n) in time
             .chunks(block_size)
             .zip((0..time.len()).step_by(block_size))
@@ -45,6 +42,7 @@ impl AudioFile {
                 fx.im = 0.0;
             }
             fft.process(&mut fft_buf);
+
             let (min, max, energy) =
                 chunk
                     .iter()
@@ -64,22 +62,28 @@ impl AudioFile {
             let centroid = centroid as f64;
             let min = min as f64;
             let max = max as f64;
-            let mut path = BezPath::new();
 
-            path.move_to((x0, max0));
-            path.line_to((x0, min0));
-            path.line_to((x1, min));
-            path.line_to((x1, max));
-            path.line_to((x0, max0));
-
-            x0 = x1;
-            max0 = max;
-            min0 = min;
-
+            path0.line_to((x1, min));
+            path1.line_to((x1, max));
+            
             let color = Color::hlc(180.0 + 10.0 * centroid, 50.0 + 40.0 * centroid, 127.0);
-            result.push((path, color))
+            
+            gradient.push(GradientStop {
+                pos: x0 as f32, 
+                color: color.clone()
+            });
+            gradient.push(GradientStop {
+                pos: x1 as f32, 
+                color
+            });
+            x0 = x1;
         }
-        PeakView { segments: result }
+        path0.line_to((1.0,0.0));
+        path1.line_to((1.0, 0.0));
+        path0.extend(path1);
+        path0.close_path();
+        (path0, LinearGradient::new(    UnitPoint::LEFT,
+            UnitPoint::RIGHT,gradient))
     }
 
     pub fn spectral_peaks(&self, channel: usize) -> Peaks {
