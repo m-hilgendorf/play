@@ -40,7 +40,7 @@ pub trait AudioBuffer {
     /// clear the buffer (set to zeros)
     fn clear(&mut self);
     /// get the number of samples in the buffer
-    fn num_samples(&self) -> usize;
+    fn get_num_samples(&self) -> usize;
 }
 
 /// A SimpleBuffer is a block of memory and associated channel configuration.
@@ -106,17 +106,17 @@ impl AudioBuffer for SimpleBuffer {
     }
     fn get_channel(&self, channel_index: usize) -> Result<&'_ [f32], Error> {
         self.channel_config.check_channel(channel_index)?;
-        let start = channel_index * self.num_samples();
-        let end = (start + self.num_samples()).min(self.memory.len());
+        let start = channel_index * self.get_num_samples();
+        let end = (start + self.get_num_samples()).min(self.memory.len());
         Ok(&self.memory[start..end])
     }
     fn get_channel_mut(&mut self, channel_index: usize) -> Result<&'_ mut [f32], Error> {
         self.channel_config.check_channel(channel_index)?;
-        let start = channel_index * self.num_samples();
-        let end = (start + self.num_samples()).min(self.memory.len());
+        let start = channel_index * self.get_num_samples();
+        let end = (start + self.get_num_samples()).min(self.memory.len());
         Ok(&mut self.memory[start..end])
     }
-    fn num_samples(&self) -> usize {
+    fn get_num_samples(&self) -> usize {
         self.memory.len() / self.channel_config.count()
     }
     fn clear(&mut self) {
@@ -152,17 +152,17 @@ impl<'a> AudioBuffer for RefBuffer<'a> {
     }
     fn get_channel(&self, channel_index: usize) -> Result<&'_ [f32], Error> {
         self.channel_config.check_channel(channel_index)?;
-        let start = channel_index * self.num_samples();
-        let end = (start + self.num_samples()).min(self.memory.len());
+        let start = channel_index * self.get_num_samples();
+        let end = (start + self.get_num_samples()).min(self.memory.len());
         Ok(&self.memory[start..end])
     }
     fn get_channel_mut(&mut self, channel_index: usize) -> Result<&'_ mut [f32], Error> {
         self.channel_config.check_channel(channel_index)?;
-        let start = channel_index * self.num_samples();
-        let end = (start + self.num_samples()).min(self.memory.len());
+        let start = channel_index * self.get_num_samples();
+        let end = (start + self.get_num_samples()).min(self.memory.len());
         Ok(&mut self.memory[start..end])
     }
-    fn num_samples(&self) -> usize {
+    fn get_num_samples(&self) -> usize {
         self.memory.len() / self.channel_config.count()
     }
     fn clear(&mut self) {
@@ -201,7 +201,7 @@ impl AudioBuffer for DelBuffer {
     }
     fn prepare(&mut self) {
         let (num_samples, num_channels, head, delay_samples) = (
-            self.num_samples(),
+            self.get_num_samples(),
             self.channel_config.count(),
             self.record_head,
             self.delay,
@@ -223,12 +223,12 @@ impl AudioBuffer for DelBuffer {
         self.record_head = (self.record_head + num_samples) % MAX_DELAY_SIZE;
     }
     fn clear(&mut self) {
-        let num_samples = self.num_samples();
+        let num_samples = self.get_num_samples();
         for sample in &mut self.memory[0..num_samples] {
             *sample = 0.0;
         }
     }
-    fn num_samples(&self) -> usize {
+    fn get_num_samples(&self) -> usize {
         self.max_buffer_size
     }
 }
@@ -246,7 +246,7 @@ impl SumBuffer {
 impl AudioBuffer for SumBuffer {
     fn get_channel(&self, channel_index: usize) -> Result<&'_ [f32], Error> {
         self.channel_config.check_channel(channel_index)?;
-        let num_samples = self.num_samples();
+        let num_samples = self.get_num_samples();
         let offset = num_samples * self.channel_config.count();
         Ok(&self.memory
             [offset + channel_index * num_samples..(offset + (channel_index + 1) * num_samples)])
@@ -261,7 +261,7 @@ impl AudioBuffer for SumBuffer {
     }
     fn prepare(&mut self) {
         let num_channels = self.channel_config.count();
-        let num_samples = self.num_samples();
+        let num_samples = self.get_num_samples();
         let (scratch, acc) = self
             .memory
             .split_at_mut(self.max_buffer_size * num_channels);
@@ -277,12 +277,12 @@ impl AudioBuffer for SumBuffer {
         }
     }
     fn clear(&mut self) {
-        let num_samples = self.num_samples();
+        let num_samples = self.get_num_samples();
         for sample in &mut self.memory[0..num_samples] {
             *sample = 0.0;
         }
     }
-    fn num_samples(&self) -> usize {
+    fn get_num_samples(&self) -> usize {
         self.max_buffer_size
     }
 }

@@ -1,4 +1,8 @@
-use crate::utils::interleave;
+use crate::{
+    audio_buffer::AudioBuffer,
+    audio_buffer::{self, channel_description, RefBuffer},
+    utils::interleave,
+};
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::Stream;
 
@@ -12,10 +16,14 @@ pub struct PlaybackContext<'a> {
 }
 
 impl<'a> PlaybackContext<'a> {
-    /// return a buffer of output samples corresponding to a channel index
-    pub fn get_output(&mut self, idx: usize) -> &'_ mut [f32] {
-        let offset = idx * self.buffer_size;
-        &mut self.output_buffer[offset..offset + self.buffer_size]
+    /// Return the underlying audio buffer of this context.
+    pub fn get_buffer(&mut self) -> Result<impl AudioBuffer + '_, audio_buffer::Error> {
+        let channel_config = match self.num_channels {
+            1 => channel_description::mono(),
+            2 => channel_description::stereo(),
+            n => channel_description::multi_mono(n),
+        };
+        RefBuffer::new(channel_config, self.buffer_size, self.output_buffer)
     }
 }
 
@@ -39,20 +47,21 @@ pub fn audio_stream(mut main_callback: impl FnMut(PlaybackContext) + Send + 'sta
     let callback = move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
         let buffer_size = data.len() / num_channels;
         output_buffer.resize(data.len(), 0.0);
-        for sample in data.iter_mut() {
-            *sample = 0.0;
+        let mut context = PlaybackContext {
+            buffer_size,
+            num_channels,
+            sample_rate,
+            output_buffer: &mut output_buffer,
+        };
+        if let Ok(mut b) = context.get_buffer() {
+            b.clear();
         }
-        for sample in &mut output_buffer.iter_mut() {
-            *sample = 0.0;
-        }
-
         let context = PlaybackContext {
             buffer_size,
             num_channels,
             sample_rate,
             output_buffer: &mut output_buffer,
         };
-
         main_callback(context);
         interleave(&output_buffer, data, num_channels);
     };

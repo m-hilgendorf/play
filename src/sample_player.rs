@@ -1,3 +1,4 @@
+use crate::audio_buffer::AudioBuffer;
 use crate::audio_file::AudioFile;
 use crate::audio_stream::PlaybackContext;
 use basedrop::{Collector, Handle, Shared};
@@ -91,7 +92,12 @@ impl SamplePlayer {
                 Message::Stop => self.state = PlayerState::Stopped,
             }
         }
-
+        let mut buffer = match context.get_buffer() {
+            Ok(b) => b,
+            Err(_) => {
+                return;
+            }
+        };
         if let PlayerState::Stopped = self.state {
             return;
         }
@@ -101,18 +107,23 @@ impl SamplePlayer {
                 self.state = PlayerState::Stopped;
                 return;
             }
-            for channel in 0..context.num_channels.max(file.num_channels) {
+            for channel in 0..buffer.get_channel_config().count().max(file.num_channels) {
+                let output = match buffer.get_channel_mut(channel) {
+                    Ok(o) => o,
+                    Err(_) => {
+                        continue;
+                    }
+                };
                 if !self.active[channel] {
                     continue;
                 }
                 let start = channel * file.num_samples + self.playhead().min(file.num_samples);
                 let end = channel * file.num_samples
-                    + (self.playhead() + context.buffer_size).min(file.num_samples);
-                context.get_output(channel)[0..(end - start)]
-                    .copy_from_slice(&file.data[start..end]);
+                    + (self.playhead() + output.len()).min(file.num_samples);
+                output[0..(end - start)].copy_from_slice(&file.data[start..end]);
             }
             self.playhead
-                .fetch_add(context.buffer_size, Ordering::SeqCst);
+                .fetch_add(buffer.get_num_samples(), Ordering::SeqCst);
         }
     }
 }
