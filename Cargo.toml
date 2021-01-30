@@ -12,3 +12,5 @@ basedrop = { git = "https://github.com/glowcoil/basedrop.git" }
 ringbuf = "0.2"
 druid = "0.7.0"
 rustfft = "5.0"
+arrayvec = "0.5"
+thiserror = "1.0"

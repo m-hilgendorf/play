@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 mod audio_file;
 mod audio_stream;
+mod audio_buffer;
 mod sample_player;
 mod ui;
 mod utils;
+
 use audio_stream::audio_stream;
 use basedrop::Collector;
 use sample_player::*;
