@@ -2,7 +2,7 @@
 mod audio_buffer;
 mod audio_file;
 mod audio_stream;
-mod node;
+mod graph;
 mod sample_player;
 mod ui;
 mod utils;

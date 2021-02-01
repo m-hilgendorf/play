@@ -1,6 +1,6 @@
 use crate::{
     audio_buffer::AudioBuffer,
-    audio_buffer::{self, channel_description, RefBuffer},
+    audio_buffer::{self, channel_description, RefBufferMut},
     utils::interleave,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
@@ -23,7 +23,7 @@ impl<'a> PlaybackContext<'a> {
             2 => channel_description::stereo(),
             n => channel_description::multi_mono(n),
         };
-        RefBuffer::new(channel_config, self.buffer_size, self.output_buffer)
+        RefBufferMut::new(channel_config, self.buffer_size, self.output_buffer)
     }
 }
 

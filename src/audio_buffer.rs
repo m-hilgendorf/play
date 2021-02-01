@@ -11,6 +11,8 @@ pub enum Error {
     InvalidChannel(usize),
     #[error("Missing or insufficient storage to create buffer")]
     StorageRequired,
+    #[error("The operation requested is undefined for this data")]
+    Undefined,
 }
 
 /// A channel configuration is a pair of values indicating how an audio buffer
@@ -41,6 +43,8 @@ pub trait AudioBuffer {
     fn clear(&mut self);
     /// get the number of samples in the buffer
     fn get_num_samples(&self) -> usize;
+    fn as_ref_buffer(&self) -> RefBuffer<'_>;
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_>;
 }
 
 /// A SimpleBuffer is a block of memory and associated channel configuration.
@@ -49,10 +53,17 @@ pub struct SimpleBuffer {
     memory: Vec<f32>,
 }
 
-/// A RefBuffer is an audio buffer that doesn't own its own memory.
-pub struct RefBuffer<'a> {
+/// A RefBufferMut is a mutable audio buffer that doesn't own its own memory.
+pub struct RefBufferMut<'a> {
     channel_config: ChannelConfiguration,
     memory: &'a mut [f32],
+}
+
+/// A RefBuffer is an immutable audio buffer that doesn't own its own memory.
+#[derive(Copy, Clone)]
+pub struct RefBuffer<'a> {
+    channel_config: ChannelConfiguration,
+    memory: &'a [f32],
 }
 
 /// A SumBuffer is used to implement mixing.
@@ -125,9 +136,20 @@ impl AudioBuffer for SimpleBuffer {
         }
     }
     fn prepare(&mut self) {}
+    fn as_ref_buffer(&self) -> RefBuffer<'_> {
+        RefBuffer::new(self.channel_config, self.get_num_samples(), &self.memory).unwrap()
+    }
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_> {
+        RefBufferMut::new(
+            self.channel_config,
+            self.get_num_samples(),
+            &mut self.memory,
+        )
+        .unwrap()
+    }
 }
 
-impl<'a> RefBuffer<'a> {
+impl<'a> RefBufferMut<'a> {
     /// Construct a new reference buffer. Returns an error if the slice is not large enough for the channel
     /// configuration and max buffer size.
     pub fn new(
@@ -145,8 +167,26 @@ impl<'a> RefBuffer<'a> {
         }
     }
 }
+impl<'a> RefBuffer<'a> {
+    /// Construct a new reference buffer. Returns an error if the slice is not large enough for the channel
+    /// configuration and max buffer size.
+    pub fn new(
+        channel_config: ChannelConfiguration,
+        max_buffer_size: usize,
+        memory: &'a [f32],
+    ) -> Result<Self, Error> {
+        if memory.len() < max_buffer_size * channel_config.count() {
+            Err(Error::StorageRequired)
+        } else {
+            Ok(Self {
+                channel_config,
+                memory,
+            })
+        }
+    }
+}
 
-impl<'a> AudioBuffer for RefBuffer<'a> {
+impl<'a> AudioBuffer for RefBufferMut<'a> {
     fn get_channel_config(&self) -> ChannelConfiguration {
         self.channel_config
     }
@@ -171,6 +211,37 @@ impl<'a> AudioBuffer for RefBuffer<'a> {
         }
     }
     fn prepare(&mut self) {}
+    fn as_ref_buffer(&self) -> RefBuffer<'_> {
+        RefBuffer::new(self.channel_config, self.get_num_samples(), &self.memory).unwrap()
+    }
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_> {
+        RefBufferMut::new(self.channel_config, self.get_num_samples(), self.memory).unwrap()
+    }
+}
+
+impl<'a> AudioBuffer for RefBuffer<'a> {
+    fn get_channel_config(&self) -> ChannelConfiguration {
+        self.channel_config
+    }
+    fn get_channel(&self, channel_index: usize) -> Result<&'_ [f32], Error> {
+        self.channel_config.check_channel(channel_index)?;
+        Ok(&self.memory
+            [channel_index * self.get_num_samples()..(channel_index + 1) * self.get_num_samples()])
+    }
+    fn get_channel_mut(&mut self, _: usize) -> Result<&'_ mut [f32], Error> {
+        Err(Error::Undefined)
+    }
+    fn get_num_samples(&self) -> usize {
+        self.memory.len() / self.channel_config.count()
+    }
+    fn clear(&mut self) {}
+    fn prepare(&mut self) {}
+    fn as_ref_buffer(&self) -> RefBuffer<'_> {
+        RefBuffer::new(self.channel_config, self.get_num_samples(), &self.memory).unwrap()
+    }
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_> {
+        unreachable!();
+    }
 }
 
 impl DelBuffer {
@@ -231,6 +302,24 @@ impl AudioBuffer for DelBuffer {
     fn get_num_samples(&self) -> usize {
         self.max_buffer_size
     }
+    fn as_ref_buffer(&self) -> RefBuffer<'_> {
+        RefBuffer::new(
+            self.channel_config,
+            self.get_num_samples(),
+            &self.memory[0..self.get_channel_config().count() * self.get_num_samples()],
+        )
+        .unwrap()
+    }
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_> {
+        let num_samples = self.get_num_samples();
+        let num_channels = self.get_channel_config().count();
+        RefBufferMut::new(
+            self.channel_config,
+            num_samples,
+            &mut self.memory[0..num_samples * num_channels],
+        )
+        .unwrap()
+    }
 }
 
 impl SumBuffer {
@@ -284,6 +373,24 @@ impl AudioBuffer for SumBuffer {
     }
     fn get_num_samples(&self) -> usize {
         self.max_buffer_size
+    }
+    fn as_ref_buffer(&self) -> RefBuffer<'_> {
+        RefBuffer::new(
+            self.channel_config,
+            self.get_num_samples(),
+            &self.memory[0..self.get_channel_config().count() * self.get_num_samples()],
+        )
+        .unwrap()
+    }
+    fn as_ref_buffer_mut(&mut self) -> RefBufferMut<'_> {
+        let num_samples = self.get_num_samples();
+        let num_channels = self.get_channel_config().count();
+        RefBufferMut::new(
+            self.channel_config,
+            num_samples,
+            &mut self.memory[0..num_samples * num_channels],
+        )
+        .unwrap()
     }
 }
 
@@ -384,9 +491,11 @@ mod tests {
         let mut mem = [0.0; 32];
         assert_eq!(
             Error::StorageRequired,
-            RefBuffer::new(multi_mono(3), 16, &mut mem).err().unwrap()
+            RefBufferMut::new(multi_mono(3), 16, &mut mem)
+                .err()
+                .unwrap()
         );
-        let buffer = RefBuffer::new(stereo(), 16, &mut mem).expect("could not create buffer");
+        let buffer = RefBufferMut::new(stereo(), 16, &mut mem).expect("could not create buffer");
         basic_tests(buffer);
     }
 
