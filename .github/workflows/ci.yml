@@ -7,8 +7,14 @@ jobs:
     steps:
       - name: Checkout 
         uses: actions/checkout@v2
+      - name: Configure 
+        uses: actions-rs/toolchain@v1 
+        with: 
+          toolchain: stable 
+          profile: minimal
+          components: rustfmt, clippy 
       - name: Format 
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/cargo@v1
         with: 
           command: fmt 
           args: --all -- --check
