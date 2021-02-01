@@ -5,9 +5,11 @@ jobs:
     name: Build and Test
     runs-on: "ubuntu-20.04"
     steps:
+      - name: Install Alsa
+        runs: sudo apt-get install libasound2-dev
       - name: Checkout 
         uses: actions/checkout@v2
-      - name: Configure 
+      - name: Configure Rust
         uses: actions-rs/toolchain@v1 
         with: 
           toolchain: stable 
